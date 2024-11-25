@@ -1,0 +1,84 @@
+version: '3.9'
+
+services:
+  web:
+    container_name: django_attendance
+    build:
+      context: .
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./app:/app
+      - static_volume:/vol/web
+      - media_volume:/vol/web
+    command: commands/start.sh
+    env_file:
+      - ./.env
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: always
+
+  db:
+    container_name: postgres_attendance
+    image: postgres:15-alpine
+    restart: always
+    volumes:
+      - postgres_data:/var/lib/postgresql/data/
+    env_file:
+      - ./.env
+    ports:
+      - "54320:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 30s
+      timeout: 30s
+      retries: 3
+
+  pgadmin:
+    container_name: pgadmin_attendance
+    image: dpage/pgadmin4
+    restart: always
+    ports:
+      - 5050:80
+    env_file:
+      - ./.env
+
+  redis:
+    container_name: redis_attendance
+    restart: always
+    image: redis:7.0.9-alpine
+
+  celery_worker:
+    container_name: celery_attendance
+    build:
+      context: .
+    command: commands/celery.sh
+    volumes:
+      - ./app:/app
+    env_file:
+      - ./.env
+    depends_on:
+      - redis
+      - db
+      - web
+    restart: always
+
+  celery_beat:
+    container_name: celery_beat_attendance
+    build:
+      context: .
+    command: commands/celery-beat.sh
+    volumes:
+      - ./app:/app
+    env_file:
+      - ./.env
+    depends_on:
+      - redis
+      - db
+      - web
+    restart: always
+volumes:
+  postgres_data:
+  static_volume:
+  media_volume:
